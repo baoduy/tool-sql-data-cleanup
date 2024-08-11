@@ -9,7 +9,7 @@ jobs:
     uses: baoduy/ShareWorkflows/.github/workflows/docker-publish.yaml@main
     with:
       dockerFile: "SqlDataCleanup/Dockerfile"
-      context: "."
+      context: "./SqlDataCleanup"
       imageName: "baoduy2412/tool-sql-cleanup"
       platforms: linux/arm64,linux/amd64
     secrets:
