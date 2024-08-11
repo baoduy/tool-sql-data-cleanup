@@ -15,7 +15,7 @@ public class SqlCleanupJob(DbCleanup config)
 
     public async Task RunAsync()
     {
-        Console.WriteLine($"Running SQL Cleanup Job with config:\n {string.Join("\n\t",config.Databases.Keys)}");
+        Console.WriteLine($"Running SQL Cleanup Job with OlderThanDays:{config.OlderThanDays} for dbs:\n {string.Join("\n\t",config.Databases.Keys)}");
 
         var beforeDate = DateTime.Today.AddDays(config.OlderThanDays * -1);
         foreach (var dbConfig in config.Databases)
