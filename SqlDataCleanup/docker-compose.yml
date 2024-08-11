@@ -1,0 +1,26 @@
+﻿services:
+  sqldatacleanup:
+    image: sqldatacleanup
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DbCleanup__OlderThanDays: '365'
+      DbCleanup__ExcludeTables__0: "__Reporting_EFMigrationHistory"
+      DbCleanup__ExcludeTables__1: "__EFMigrationHistory"
+      DbCleanup__ExcludeTables__2: "VirtualAccounts"
+      DbCleanup__ExcludeTables__3: "Accounts"
+      DbCleanup__ExcludeTables__4: "FundingAccounts"
+      DbCleanup__ExcludeTables__5: "Cards"
+      DbCleanup__ExcludeTables__6: "BackgroundTaskCache"
+      DbCleanup__ExcludeTables__7: "Nostros"
+      DbCleanup__ExcludeTables__8: "Wallets"
+      DbCleanup__ExcludeTables__9: "VirtualBankAccounts"
+      DbCleanup__ExcludeTables__10: "SupportedPayers"
+      DbCleanup__ExcludeTables__11: "Senders"
+      DbCleanup__ExcludeTables__12: "VirtualBankAccounts"
+      DbCleanup__ExcludeTables__13: "Rules"
+      DbCleanup__ConditionFields__0: "CreatedAt"
+      #for sg-dev-Analytics-Db
+      DbCleanup__Databases__sandbox-sg-sandbox-submersiblecompliance-db__ConditionFields__0: "CreatedOn"
+      #DbCleanup__ConnectionString: Server=tcp:[YourSqlServerName],1433;Initial Catalog=[DbName];Encrypt=True;TrustServerCertificate=True;Connection Timeout=30;Authentication="Active Directory Default";

@@ -1,8 +1,8 @@
-﻿FROM mcr.microsoft.com/dotnet/runtime-deps:8.0-alpine AS base
+﻿FROM mcr.microsoft.com/dotnet/runtime:8.0 AS base
 USER $APP_UID
 WORKDIR /app
 
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:8.0-alpine AS build
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 ARG TARGETARCH
 ARG BUILDPLATFORM
 ARG BUILD_CONFIGURATION=Release
@@ -20,10 +20,10 @@ ARG BUILD_CONFIGURATION=Release
 
 RUN dotnet publish "SqlDataCleanup.csproj" -c $BUILD_CONFIGURATION \
     -o /app/publish \
-    /p:UseAppHost=true \
-    /p:PublishSelfContained=true \
-    /p:PublishTrimmed=true \
-    /p:PublishSingleFile=true \
+    /p:UseAppHost=false \
+    #/p:PublishSelfContained=true \
+    #/p:PublishTrimmed=true \
+    #/p:PublishSingleFile=true \
     -a $TARGETARCH
 
 FROM --platform=$BUILDPLATFORM base AS final
@@ -33,4 +33,6 @@ ARG BUILDPLATFORM
 WORKDIR /app
 COPY --from=publish /app/publish .
 RUN rm appsettings.json
-ENTRYPOINT ["./SqlDataCleanup"]
+#ENTRYPOINT ["./SqlDataCleanup"]
+ENTRYPOINT ["dotnet","SqlDataCleanup.dll"]
+
