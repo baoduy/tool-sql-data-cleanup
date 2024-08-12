@@ -36,9 +36,8 @@ public class TableInfo
 
 public class DbCleanupJob(string name, string connectionString, DateTime beforeDate, DbConfig config)
 {
-    private DbContext CreateDbContext()=>
+    private DbContext CreateDbContext() =>
         new(new DbContextOptionsBuilder().UseSqlServer(connectionString).Options);
-
 
     private async Task<IEnumerable<TableInfo>> GetTablesAsync()
     {
