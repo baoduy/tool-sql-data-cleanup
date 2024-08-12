@@ -47,6 +47,8 @@ public class DbCleanupJob(string name, string connectionString, DateTime beforeD
 
     private async Task<IEnumerable<TableInfo>> GetTablesAsync()
     {
+        Console.WriteLine($"${name}: Reading all tables...");
+
         var tables = await _context.Database
             .SqlQuery<TableInfo>(
                 $"SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA <> 'sys' and TABLE_TYPE= 'BASE TABLE'")
@@ -58,6 +60,8 @@ public class DbCleanupJob(string name, string connectionString, DateTime beforeD
 
     private async Task<IEnumerable<TableInfo>> SortTableReferences(List<TableInfo> tables)
     {
+        Console.WriteLine($"${name}: Ordering tables based on the dependencies...");
+
         var tablesDepends = await _context.Database
             .SqlQuery<TableDepend>($@"
                 SELECT DISTINCT
@@ -73,10 +77,13 @@ FROM
 
         foreach (var tableDepend in tablesDepends)
         {
-            var pkTable = tables.First(t =>
+            var pkTable = tables.FirstOrDefault(t =>
                 t.TableName.Equals(tableDepend.PkTable, StringComparison.CurrentCultureIgnoreCase));
-            var fkTable = tables.First(t =>
+            var fkTable = tables.FirstOrDefault(t =>
                 t.TableName.Equals(tableDepend.FkTable, StringComparison.CurrentCultureIgnoreCase));
+
+            //These tables may be in the excluded list
+            if (pkTable is null || fkTable is null) continue;
             fkTable.AddPkTable(pkTable);
         }
 
@@ -98,7 +105,7 @@ FROM
 
     private async Task DeleteRecordsAsync(string table)
     {
-        Console.WriteLine($"Deleting table {table} before {beforeDate}...");
+        Console.WriteLine($"${name}: Deleting table {table} before {beforeDate}...");
 
         var count = 0;
         var hasMoreRows = true;
