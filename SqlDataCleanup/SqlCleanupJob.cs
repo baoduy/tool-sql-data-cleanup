@@ -6,6 +6,7 @@ public class SqlCleanupJob(DbCleanup config)
     {
         dbConfig.ExcludeTables = config.ExcludeTables.Union(dbConfig.ExcludeTables).ToArray();
         dbConfig.OlderThanDays ??= config.OlderThanDays;
+        dbConfig.PrimaryField ??= config.PrimaryField;
         dbConfig.ConditionFields = dbConfig.ConditionFields.Any()
             ? dbConfig.ConditionFields
             : config.ConditionFields;
@@ -15,7 +16,8 @@ public class SqlCleanupJob(DbCleanup config)
 
     public async Task RunAsync()
     {
-        Console.WriteLine($"Running SQL Cleanup Job with OlderThanDays:{config.OlderThanDays} for dbs:\n {string.Join("\n\t",config.Databases.Keys)}");
+        Console.WriteLine(
+            $"Running SQL Cleanup Job with OlderThanDays:{config.OlderThanDays} for dbs:\n {string.Join("\n\t", config.Databases.Keys)}");
 
         var beforeDate = DateTime.Today.AddDays(config.OlderThanDays * -1);
         foreach (var dbConfig in config.Databases)
@@ -23,7 +25,7 @@ public class SqlCleanupJob(DbCleanup config)
             var conn = config.ConnectionString.Replace("[DbName]", dbConfig.Key);
             var db = PreparingConfig(dbConfig.Value);
 
-            await using var dbCleanup = new DbCleanupJob(dbConfig.Key, conn, beforeDate, db);
+            var dbCleanup = new DbCleanupJob(dbConfig.Key, conn, beforeDate, db);
             await dbCleanup.RunAsync();
         }
 

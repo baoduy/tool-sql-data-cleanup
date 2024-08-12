@@ -11,17 +11,15 @@ public class TableInfo
 }
 
 public class DbCleanupJob(string name, string connectionString, DateTime beforeDate, DbConfig config)
-    : IDisposable, IAsyncDisposable
 {
-    private readonly DbContext _context =
-        new(new DbContextOptionsBuilder().UseSqlServer(connectionString).Options);
+    private DbContext CreateDbContext() => new(new DbContextOptionsBuilder()
+        .UseSqlServer(connectionString, op => op.EnableRetryOnFailure()).Options);
 
-    public void Dispose() => _context.Dispose();
-    public async ValueTask DisposeAsync() => await _context.DisposeAsync();
 
     private async Task<IEnumerable<TableInfo>> GetTablesAsync()
     {
-        var tables = await _context.Database
+        await using var ctx = CreateDbContext();
+        var tables = await ctx.Database
             .SqlQuery<TableInfo>(
                 $"SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA <> 'sys' and TABLE_TYPE= 'BASE TABLE'")
             .AsNoTracking().ToListAsync();
@@ -39,7 +37,7 @@ public class DbCleanupJob(string name, string connectionString, DateTime beforeD
                     FROM {table}
                     WHERE {fields}
                 )
-                DELETE FROM {table} WHERE Id IN (SELECT Id FROM CTE)
+                DELETE FROM {table} WHERE {config.PrimaryField} IN (SELECT {config.PrimaryField} FROM CTE)
                 """;
     }
 
@@ -51,12 +49,15 @@ public class DbCleanupJob(string name, string connectionString, DateTime beforeD
         var hasMoreRows = true;
         while (hasMoreRows)
         {
-            var rowsAffected = await _context.Database.ExecuteSqlRawAsync(BuildQuery(table), new SqlParameter("@beforeDate", beforeDate));
+            await using var ctx = CreateDbContext();
+            var rowsAffected =
+                await ctx.Database.ExecuteSqlRawAsync(BuildQuery(table),
+                    new SqlParameter("@beforeDate", beforeDate));
 
             hasMoreRows = rowsAffected > 0;
             count += rowsAffected;
 
-            if (hasMoreRows) await Task.Delay(TimeSpan.FromSeconds(3));
+            //if (hasMoreRows) await Task.Delay(TimeSpan.FromSeconds(3));
         }
 
         Console.WriteLine($"Deleted {count} records from {table}.");
