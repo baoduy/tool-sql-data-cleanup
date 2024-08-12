@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Runtime.InteropServices.Marshalling;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,7 +14,6 @@ public class TableInfo
 {
     private readonly HashSet<TableInfo> _listPkTables = [];
     private int _weight = 0;
-
     [Column("TABLE_NAME")] public string TableName { get; set; } = default!;
     [Column("TABLE_SCHEMA")] public string Schema { get; set; } = default!;
 
@@ -104,7 +102,7 @@ FROM
 
     private async Task DeleteRecordsAsync(string table)
     {
-        Console.WriteLine($"${name}: Deleting table {table} before {beforeDate}...");
+        Console.WriteLine($"Deleting table {table} before {beforeDate}...");
 
         var count = 0;
         var hasMoreRows = true;
@@ -117,7 +115,7 @@ FROM
             hasMoreRows = rowsAffected > 0;
             count += rowsAffected;
 
-            if (hasMoreRows) await Task.Delay(TimeSpan.FromSeconds(3));
+            //if (hasMoreRows) await Task.Delay(TimeSpan.FromSeconds(3));
         }
 
         Console.WriteLine($"Deleted {count} records from {table}.");
@@ -131,8 +129,6 @@ FROM
             throw new ArgumentNullException(nameof(config.ConditionFields));
 
         var tables = await GetTablesAsync();
-        tables = await SortTableReferences(tables.ToList());
-
         foreach (var table in tables)
         {
             try
