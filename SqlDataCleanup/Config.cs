@@ -7,6 +7,7 @@ namespace SqlDataCleanup;
 
 public class DbConfig
 {
+    public string? PrimaryField { get; set; }
     public string[] ExcludeTables { get; set; } = Enumerable.Empty<string>().ToArray();
     public string[] ConditionFields { get; set; } = Enumerable.Empty<string>().ToArray();
     public int? OlderThanDays { get; set; }
@@ -21,6 +22,9 @@ public class DbCleanup
 
     [Required(AllowEmptyStrings = false)]
     public string ConnectionString { get; set; } = default!;
+
+    [Required(AllowEmptyStrings = false)]
+    public string PrimaryField { get; set; } = "Id";
 
     public string[] ExcludeTables { get; set; } = Enumerable.Empty<string>().ToArray();
     public string[] ConditionFields { get; set; } = Enumerable.Empty<string>().ToArray();

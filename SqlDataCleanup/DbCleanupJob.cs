@@ -20,7 +20,7 @@ public class TableInfo
     [Column("TABLE_SCHEMA")] public string Schema { get; set; } = default!;
 
     public int Weaight => _weight;
-    public IEnumerable<TableInfo> PkTables => _listPkTables;
+    //public IEnumerable<TableInfo> PkTables => _listPkTables;
 
     private void InCreaseWeight()
     {
@@ -37,19 +37,17 @@ public class TableInfo
 }
 
 public class DbCleanupJob(string name, string connectionString, DateTime beforeDate, DbConfig config)
-    : IDisposable, IAsyncDisposable
 {
-    private readonly DbContext _context =
+    private DbContext CreateDbContext()=>
         new(new DbContextOptionsBuilder().UseSqlServer(connectionString).Options);
 
-    public void Dispose() => _context.Dispose();
-    public async ValueTask DisposeAsync() => await _context.DisposeAsync();
 
     private async Task<IEnumerable<TableInfo>> GetTablesAsync()
     {
         Console.WriteLine($"${name}: Reading all tables...");
 
-        var tables = await _context.Database
+        await using var db = CreateDbContext();
+        var tables = await db.Database
             .SqlQuery<TableInfo>(
                 $"SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA <> 'sys' and TABLE_TYPE= 'BASE TABLE'")
             .AsNoTracking().ToListAsync();
@@ -62,7 +60,8 @@ public class DbCleanupJob(string name, string connectionString, DateTime beforeD
     {
         Console.WriteLine($"${name}: Ordering tables based on the dependencies...");
 
-        var tablesDepends = await _context.Database
+        await using var db = CreateDbContext();
+        var tablesDepends = await db.Database
             .SqlQuery<TableDepend>($@"
                 SELECT DISTINCT
     FK_Table = FK.TABLE_NAME, 
@@ -99,7 +98,7 @@ FROM
                     FROM {table}
                     WHERE {fields}
                 )
-                DELETE FROM {table} WHERE Id IN (SELECT Id FROM CTE)
+                DELETE FROM {table} WHERE {config.PrimaryField} IN (SELECT {config.PrimaryField} FROM CTE)
                 """;
     }
 
@@ -111,7 +110,8 @@ FROM
         var hasMoreRows = true;
         while (hasMoreRows)
         {
-            var rowsAffected = await _context.Database.ExecuteSqlRawAsync(BuildDeleteQuery(table),
+            await using var db = CreateDbContext();
+            var rowsAffected = await db.Database.ExecuteSqlRawAsync(BuildDeleteQuery(table),
                 new SqlParameter("@beforeDate", beforeDate));
 
             hasMoreRows = rowsAffected > 0;
