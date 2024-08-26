@@ -5,32 +5,30 @@ using Microsoft.Extensions.Options;
 
 namespace SqlDataCleanup;
 
-public class DbConfig
+public abstract class SharedConfig
 {
     public string? PrimaryField { get; set; }
-    public string[] ExcludeTables { get; set; } = Enumerable.Empty<string>().ToArray();
     public string[] ConditionFields { get; set; } = Enumerable.Empty<string>().ToArray();
-    public int? OlderThanDays { get; set; }
+
+    [Required, Range(30, int.MaxValue)] public int? OlderThanDays { get; set; }
 }
 
-public class DbCleanup
+public sealed class TableConfig : SharedConfig
+{
+}
+
+public sealed class DbConfig : SharedConfig
+{
+    public Dictionary<string, TableConfig> Tables { get; set; } = new();
+}
+
+public sealed class SqlConfig : SharedConfig
 {
     public static string Name = "DbCleanup";
-
-    [Required,Range(180,int.MaxValue)]
-    public int OlderThanDays { get; set; }
-
-    [Required(AllowEmptyStrings = false)]
-    public string ConnectionString { get; set; } = default!;
-
-    [Required(AllowEmptyStrings = false)]
-    public string PrimaryField { get; set; } = "Id";
-
-    public string[] ExcludeTables { get; set; } = Enumerable.Empty<string>().ToArray();
-    public string[] ConditionFields { get; set; } = Enumerable.Empty<string>().ToArray();
-
-    [Required]
-    public Dictionary<string, DbConfig> Databases { get; set; } = new();
+    
+    [Required(AllowEmptyStrings = false)] public string ConnectionString { get; set; } = default!;
+    
+    [Required] public Dictionary<string, DbConfig> Databases { get; set; } = new();
 }
 
 public static class Config
@@ -46,15 +44,15 @@ public static class Config
             //.AddLogging()
             .AddSingleton<IConfiguration>(config);
 
-        services.AddOptions<DbCleanup>()
-            .BindConfiguration(DbCleanup.Name);
+        services.AddOptions<SqlConfig>()
+            .BindConfiguration(SqlConfig.Name);
 
-        services.AddSingleton<DbCleanup>(sp=>sp.GetDbCleanupConfig())
+        services.AddSingleton<SqlConfig>(sp => sp.GetDbCleanupConfig())
             .AddSingleton<SqlCleanupJob>();
 
         return services.BuildServiceProvider();
     }
 
-    public static DbCleanup GetDbCleanupConfig(this IServiceProvider provider)
-        => provider.GetRequiredService<IOptions<DbCleanup>>().Value;
+    public static SqlConfig GetDbCleanupConfig(this IServiceProvider provider)
+        => provider.GetRequiredService<IOptions<SqlConfig>>().Value;
 }
