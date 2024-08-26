@@ -45,7 +45,7 @@ public class DbCleanupJob(string name, string connectionString, DbConfig dbConfi
 
     private async Task<IEnumerable<TableInfo>> GetTablesAsync()
     {
-        Console.WriteLine($"${name}: Reading all tables...");
+        Console.WriteLine($"{name}: Reading all tables...");
 
         await using var db = CreateDbContext();
         var tables = await db.Database
@@ -60,7 +60,7 @@ public class DbCleanupJob(string name, string connectionString, DbConfig dbConfi
 
     private async Task<IEnumerable<TableInfo>> SortTableReferences(List<TableInfo> tables)
     {
-        Console.WriteLine($"${name}: Ordering tables based on the dependencies...");
+        Console.WriteLine($"{name}: Ordering tables based on the dependencies...");
 
         await using var db = CreateDbContext();
         var tablesDepends = await db.Database
