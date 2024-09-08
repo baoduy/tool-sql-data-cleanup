@@ -4,22 +4,48 @@ using Microsoft.EntityFrameworkCore;
 
 namespace SqlDataCleanup;
 
+/// <summary>
+/// Represents a table dependency with foreign key and primary key tables.
+/// </summary>
 class TableDepend
 {
+    /// <summary>
+    /// Gets or sets the foreign key table name.
+    /// </summary>
     [Column("FK_Table")] public string FkTable { get; set; } = default!;
+
+    /// <summary>
+    /// Gets or sets the primary key table name.
+    /// </summary>
     [Column("PK_Table")] public string PkTable { get; set; } = default!;
 }
 
+/// <summary>
+/// Represents information about a database table.
+/// </summary>
 public class TableInfo
 {
-    private readonly HashSet<TableInfo> _listPkTables = [];
+    private readonly HashSet<TableInfo> _listPkTables = new();
     private int _weight = 0;
+
+    /// <summary>
+    /// Gets or sets the table name.
+    /// </summary>
     [Column("TABLE_NAME")] public string TableName { get; set; } = default!;
+
+    /// <summary>
+    /// Gets or sets the schema of the table.
+    /// </summary>
     [Column("TABLE_SCHEMA")] public string Schema { get; set; } = default!;
 
+    /// <summary>
+    /// Gets the weight of the table, used for sorting based on dependencies.
+    /// </summary>
     public int Weaight => _weight;
-    //public IEnumerable<TableInfo> PkTables => _listPkTables;
 
+    /// <summary>
+    /// Increases the weight of the table and recursively increases the weight of dependent tables.
+    /// </summary>
     private void InCreaseWeight()
     {
         _weight += 1;
@@ -27,6 +53,10 @@ public class TableInfo
             table.InCreaseWeight();
     }
 
+    /// <summary>
+    /// Adds a primary key table to the list of dependent tables and increases its weight.
+    /// </summary>
+    /// <param name="table">The primary key table to add.</param>
     public void AddPkTable(TableInfo table)
     {
         if (_listPkTables.Add(table))
@@ -34,14 +64,43 @@ public class TableInfo
     }
 }
 
-public class DbCleanupJob(string name, string connectionString, DateTime beforeDate, DbConfig config)
+/// <summary>
+/// Represents a job to clean up the database by deleting old records.
+/// </summary>
+/// <param name="name">The name of the cleanup job.</param>
+/// <param name="connectionString">The connection string to the database.</param>
+/// <param name="dbConfig">The database configuration.</param>
+public class DbCleanupJob
 {
-    private DbContext CreateDbContext() =>
-        new(new DbContextOptionsBuilder().UseSqlServer(connectionString).Options);
+    private readonly string name;
+    private readonly string connectionString;
+    private readonly DbConfig dbConfig;
 
+    public DbCleanupJob(string name, string connectionString, DbConfig dbConfig)
+    {
+        this.name = name;
+        this.connectionString = connectionString;
+        this.dbConfig = dbConfig;
+    }
+
+    /// <summary>
+    /// Creates a new instance of the database context.
+    /// </summary>
+    /// <returns>A new <see cref="DbContext"/> instance.</returns>
+    private DbContext CreateDbContext()
+    {
+        var db = new DbContext(new DbContextOptionsBuilder().UseSqlServer(connectionString).Options);
+        db.Database.SetCommandTimeout(TimeSpan.FromMinutes(5));
+        return db;
+    }
+
+    /// <summary>
+    /// Asynchronously retrieves the list of tables from the database.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the list of tables.</returns>
     private async Task<IEnumerable<TableInfo>> GetTablesAsync()
     {
-        Console.WriteLine($"${name}: Reading all tables...");
+        Console.WriteLine($"{name}: Reading all tables...");
 
         await using var db = CreateDbContext();
         var tables = await db.Database
@@ -49,13 +108,19 @@ public class DbCleanupJob(string name, string connectionString, DateTime beforeD
                 $"SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA <> 'sys' and TABLE_TYPE= 'BASE TABLE'")
             .AsNoTracking().ToListAsync();
 
+        // Only take the whitelist tables
         return tables.Where(s =>
-            !config.ExcludeTables.Contains(s.TableName, StringComparer.InvariantCultureIgnoreCase));
+            dbConfig.Tables.Keys.Contains(s.TableName, StringComparer.InvariantCultureIgnoreCase));
     }
 
+    /// <summary>
+    /// Asynchronously sorts the tables based on their dependencies.
+    /// </summary>
+    /// <param name="tables">The list of tables to sort.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the sorted list of tables.</returns>
     private async Task<IEnumerable<TableInfo>> SortTableReferences(List<TableInfo> tables)
     {
-        Console.WriteLine($"${name}: Ordering tables based on the dependencies...");
+        Console.WriteLine($"{name}: Ordering tables based on the dependencies...");
 
         await using var db = CreateDbContext();
         var tablesDepends = await db.Database
@@ -78,7 +143,7 @@ FROM
             var fkTable = tables.FirstOrDefault(t =>
                 t.TableName.Equals(tableDepend.FkTable, StringComparison.CurrentCultureIgnoreCase));
 
-            //These tables may be in the excluded list
+            // These tables may be in the excluded list
             if (pkTable is null || fkTable is null) continue;
             fkTable.AddPkTable(pkTable);
         }
@@ -86,21 +151,34 @@ FROM
         return tables.OrderBy(t => t.Weaight);
     }
 
-    private string BuildDeleteQuery(string table)
+    /// <summary>
+    /// Builds the SQL delete query for a specific table based on the table configuration.
+    /// </summary>
+    /// <param name="table">The name of the table.</param>
+    /// <param name="tbConfig">The table configuration.</param>
+    /// <returns>The SQL delete query string.</returns>
+    private string BuildDeleteQuery(string table, TableConfig tbConfig)
     {
-        var fields = string.Join(" AND ", config.ConditionFields.Select(f => $"{f} < @beforeDate"));
+        var fields = string.Join(" AND ", tbConfig.ConditionFields.Select(f => $"{f} < @beforeDate"));
         return $"""
                 WITH CTE AS (
                     SELECT TOP (1000) * 
                     FROM {table}
                     WHERE {fields}
                 )
-                DELETE FROM {table} WHERE {config.PrimaryField} IN (SELECT {config.PrimaryField} FROM CTE)
+                DELETE FROM {table} WHERE {tbConfig.PrimaryField} IN (SELECT {tbConfig.PrimaryField} FROM CTE)
                 """;
     }
 
-    private async Task DeleteRecordsAsync(string table)
+    /// <summary>
+    /// Asynchronously deletes old records from a specific table based on the table configuration.
+    /// </summary>
+    /// <param name="table">The name of the table.</param>
+    /// <param name="tbConfig">The table configuration.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    private async Task DeleteRecordsAsync(string table, TableConfig tbConfig)
     {
+        var beforeDate = DateTime.Today.AddDays((tbConfig.OlderThanDays ?? 365) * -1);
         Console.WriteLine($"Deleting table {table} before {beforeDate}...");
 
         var count = 0;
@@ -108,31 +186,36 @@ FROM
         while (hasMoreRows)
         {
             await using var db = CreateDbContext();
-            var rowsAffected = await db.Database.ExecuteSqlRawAsync(BuildDeleteQuery(table),
-                new SqlParameter("@beforeDate", beforeDate));
+            var query = BuildDeleteQuery(table, tbConfig);
+            var rowsAffected = await db.Database.ExecuteSqlRawAsync(query, new SqlParameter("@beforeDate", beforeDate));
 
             hasMoreRows = rowsAffected > 0;
             count += rowsAffected;
 
-            //if (hasMoreRows) await Task.Delay(TimeSpan.FromSeconds(3));
+            Console.WriteLine($"\tDeleted 1000 records from {table}.");
         }
 
-        Console.WriteLine($"Deleted {count} records from {table}.");
+        Console.WriteLine($"Total Deleted {count} records from {table}.");
     }
 
+    /// <summary>
+    /// Asynchronously runs the database cleanup job.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     public async Task RunAsync()
     {
         Console.WriteLine($"Running {name} cleanup job...");
 
-        if (config.ConditionFields.Length == 0)
-            throw new ArgumentNullException(nameof(config.ConditionFields));
-
         var tables = await GetTablesAsync();
-        foreach (var table in tables)
+        var shortedTables = await SortTableReferences(tables.ToList());
+
+        foreach (var table in shortedTables)
         {
             try
             {
-                await DeleteRecordsAsync($"[{table.Schema}].[{table.TableName}]");
+                var tbConfig = dbConfig.Tables[table.TableName];
+                tbConfig.PreparingConfig(dbConfig);
+                await DeleteRecordsAsync($"[{table.Schema}].[{table.TableName}]", tbConfig);
             }
             catch (Exception ex)
             {
